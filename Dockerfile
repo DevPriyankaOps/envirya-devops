@@ -1,7 +1,5 @@
 FROM python
 
-MAINTAINER Vishnu Dadhich "https://github.com/vishnuhd/"
-
 RUN apt-get update -y
 
 # We copy just the requirements.txt first to leverage Docker cache
