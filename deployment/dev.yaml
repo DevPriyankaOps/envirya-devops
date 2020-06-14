@@ -3,6 +3,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: envirya-dev
+  namespace: dev
   labels:
     app: envirya
 spec:
@@ -25,6 +26,7 @@ apiVersion: v1
 kind: Service
 metadata:
   name: envirya-dev
+  namespace: dev
   labels:
     run: envirya-dev
 spec:
