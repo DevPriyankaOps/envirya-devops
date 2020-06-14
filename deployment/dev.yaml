@@ -18,7 +18,7 @@ spec:
     spec:
       containers:
       - name: envirya-dev
-        image: priyankaverma/envirya:dev-v17
+        image: priyankaverma/envirya
         ports:
         - containerPort: 5000
 ---
