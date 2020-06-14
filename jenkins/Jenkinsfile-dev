@@ -1,0 +1,99 @@
+jobName = env.JOB_NAME
+buildNumber = env.BUILD_NUMBER
+
+pipeline {
+    agent any
+    options {
+    buildDiscarder(logRotator(numToKeepStr: '20'))
+    disableConcurrentBuilds()
+    skipDefaultCheckout true
+    }
+    parameters {
+        string(name: 'projectName', defaultValue: 'Envirya-DevOps', description: 'Name of the project')
+        string(name: 'sourceCodeRepo', defaultValue: 'https://github.com/DevPriyankaOps/envirya-devops.git', description: 'Source Code Repository')
+        string(name: 'buildBranch', defaultValue: 'dev', description: 'Which branch should be built , this could be the parent or the feature branch')
+        string(name: 'gitRepoCredentials', defaultValue: 'git-creds', description: 'Build Script Branch')
+        string(name: 'registryUrl', defaultValue: 'https://registry-1.docker.io/v2', description: 'Container Registry URL')
+        string(name: 'dockerRepository', defaultValue: 'priyankaverma/envirya', description: 'The docker repository')
+        string(name: 'registryCredentialsId', defaultValue: 'docker-registry-creds', description: 'The credentials id that points to the Container Registry credentials')
+    }
+    triggers {
+        GenericTrigger(
+            genericVariables: [
+            [key: 'ref', value: '$.ref'],
+            [key: 'commit_msg', value: '$.head_commit[\'message\']']
+            ],
+            causeString: 'Triggered on $ref',
+     
+            token: 'dev-build',
+     
+            printContributedVariables: false,
+            printPostContent: false,
+    
+            regexpFilterText: '$ref',
+            regexpFilterExpression: 'refs/heads/dev'
+        )
+    }
+    stages{
+        stage("Pull from repo"){
+            steps{
+                script{
+                    try {
+                        cleanWs()
+                        git branch: params.buildBranch, url: params.sourceCodeRepo
+                        sh '''
+                        ls -al
+                        '''
+                        echo "Prepared local repo"
+                    }
+                    catch (Exception e) {
+                        echo "Build failed!"
+                        sh "exit 1"
+                    }
+                }
+            }
+        }
+        stage("Docker Build and Push"){
+            steps{
+                script{
+                    try {
+                        sh 'ls -al'
+                        dockerfile = "Dockerfile"
+                        built_img = docker.build("${params.dockerRepository}", "-f ${dockerfile} .")
+                        docker.withRegistry("${params.registryUrl}", "${params.registryCredentialsId}" ){
+                            built_img.push("dev-v${BUILD_NUMBER}");
+                        }
+                    }
+                    catch (Exception e) {
+                        echo "Build failed!"
+                        sh "exit 1"
+                    }
+                }
+            }
+        }
+        stage("Kubernetes Deployment"){
+            steps{
+                script{
+                    try {
+                        sh "sed -i 's/envirya:latest/envirya:dev-v${BUILD_NUMBER}/g'  deployment/dev.yaml"
+                        sh '''
+                        export KUBECONFIG=/usr/bin/kube.config
+                        kubectl get nodes
+                        kubectl apply -f deployment/dev.yaml
+                        kubectl get svc -n dev
+                        '''
+                    }
+                    catch (Exception e) {
+                        echo "Build failed!"
+                        sh "exit 1"
+                    }
+                }
+            }
+        }
+    }
+    post { 
+        always {
+            echo "${projectName} - Build complete"
+        }
+    }
+}
